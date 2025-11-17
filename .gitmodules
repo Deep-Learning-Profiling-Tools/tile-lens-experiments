@@ -1,3 +1,6 @@
 [submodule "submodules/TritonBench"]
 	path = submodules/TritonBench
 	url = git@github.com:mark14wu/TritonBench.git
+[submodule "submodules/triton-viz"]
+	path = submodules/triton-viz
+	url = git@github.com:Deep-Learning-Profiling-Tools/triton-viz.git
