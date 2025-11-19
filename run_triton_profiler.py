@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Script to run all Python files in TritonBench/data/TritonBench_G_v1
+Script to run all Python files in submodules/TritonBench/data/TritonBench_G_v1
 Features:
 - Resumable execution (checkpoint/resume)
 - Real-time progress display
@@ -21,7 +21,7 @@ from pathlib import Path
 from datetime import datetime
 
 class TritonProfilerRunner:
-    def __init__(self, benchmark_dir="TritonBench/data/TritonBench_G_v1",
+    def __init__(self, benchmark_dir="submodules/TritonBench/data/TritonBench_G_v1",
                  work_dir="triton_profiler_results"):
         self.benchmark_dir = Path(benchmark_dir)
         self.work_dir = Path(work_dir)
