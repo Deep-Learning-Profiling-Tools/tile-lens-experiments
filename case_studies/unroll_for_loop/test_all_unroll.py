@@ -22,6 +22,10 @@ diag_optimized = _load_module("diag_ssm_optimized", "diag_ssm_triton/optimized.p
 fr_baseline = _load_module("frr_baseline", "fused_recurrent_retention/baseline.py")
 fr_optimized = _load_module("frr_optimized", "fused_recurrent_retention/optimized.py")
 
+# fused_recurrent_delta modules
+frd_baseline = _load_module("frd_baseline", "fused_recurrent_delta/baseline.py")
+frd_optimized = _load_module("frd_optimized", "fused_recurrent_delta/optimized.py")
+
 
 def _report(title: str, ok: bool):
     mark = "✓" if ok else "✗"
@@ -155,11 +159,125 @@ def test_fused_recurrent_retention():
     return retention_ok
 
 
+def test_fused_recurrent_delta():
+    print("\n" + "=" * 80)
+    print("Testing Fused Recurrent Delta (baseline vs optimized)")
+    print("=" * 80)
+
+    torch.manual_seed(42)
+    torch.cuda.manual_seed(42)
+
+    B, H, T, K, V = 2, 4, 8, 16, 32
+    rtol, atol = 1e-4, 1e-5
+
+    # ---------- Headwise beta with initial state ----------
+    q = torch.randn(B, H, T, K, dtype=torch.float32, device="cuda", requires_grad=True)
+    k = torch.randn(B, H, T, K, dtype=torch.float32, device="cuda", requires_grad=True)
+    v = torch.randn(B, H, T, V, dtype=torch.float32, device="cuda", requires_grad=True)
+    beta = torch.randn(B, H, T, V, dtype=torch.float32, device="cuda", requires_grad=True)
+    init = torch.randn(B, H, K, V, dtype=torch.float32, device="cuda", requires_grad=True)
+
+    q_opt = q.detach().clone().requires_grad_(True)
+    k_opt = k.detach().clone().requires_grad_(True)
+    v_opt = v.detach().clone().requires_grad_(True)
+    beta_opt = beta.detach().clone().requires_grad_(True)
+    init_opt = init.detach().clone().requires_grad_(True)
+
+    o_base, fs_base = frd_baseline.fused_recurrent_delta_rule(
+        q, k, v, beta=beta, initial_state=init, output_final_state=True
+    )
+    o_opt, fs_opt = frd_optimized.fused_recurrent_delta_rule(
+        q_opt, k_opt, v_opt, beta=beta_opt, initial_state=init_opt, output_final_state=True
+    )
+
+    head_fwd_o_ok = torch.allclose(o_base, o_opt, rtol=rtol, atol=atol)
+    head_fwd_fs_ok = torch.allclose(fs_base, fs_opt, rtol=rtol, atol=atol)
+
+    loss_base = o_base.sum() + fs_base.sum()
+    loss_opt = o_opt.sum() + fs_opt.sum()
+    loss_base.backward()
+    loss_opt.backward()
+
+    head_grad_q_ok = torch.allclose(q.grad, q_opt.grad, rtol=rtol, atol=atol)
+    head_grad_k_ok = torch.allclose(k.grad, k_opt.grad, rtol=rtol, atol=atol)
+    head_grad_v_ok = torch.allclose(v.grad, v_opt.grad, rtol=rtol, atol=atol)
+    head_grad_beta_ok = torch.allclose(beta.grad, beta_opt.grad, rtol=rtol, atol=atol)
+    head_grad_init_ok = torch.allclose(init.grad, init_opt.grad, rtol=rtol, atol=atol)
+
+    headwise_ok = head_fwd_o_ok and head_fwd_fs_ok and head_grad_q_ok and head_grad_k_ok and head_grad_v_ok and head_grad_beta_ok and head_grad_init_ok
+    if not headwise_ok:
+        if not head_fwd_o_ok:
+            print("Delta headwise forward o max diff:", torch.max(torch.abs(o_base - o_opt)).item())
+        if not head_fwd_fs_ok:
+            print("Delta headwise forward fs max diff:", torch.max(torch.abs(fs_base - fs_opt)).item())
+        if not head_grad_q_ok:
+            print("Delta headwise grad_q max diff:", torch.max(torch.abs(q.grad - q_opt.grad)).item())
+        if not head_grad_k_ok:
+            print("Delta headwise grad_k max diff:", torch.max(torch.abs(k.grad - k_opt.grad)).item())
+        if not head_grad_v_ok:
+            print("Delta headwise grad_v max diff:", torch.max(torch.abs(v.grad - v_opt.grad)).item())
+        if not head_grad_beta_ok:
+            print("Delta headwise grad_beta max diff:", torch.max(torch.abs(beta.grad - beta_opt.grad)).item())
+        if not head_grad_init_ok:
+            print("Delta headwise grad_init max diff:", torch.max(torch.abs(init.grad - init_opt.grad)).item())
+
+    # ---------- Non-headwise beta without initial state ----------
+    q2 = torch.randn(B, H, T, K, dtype=torch.float32, device="cuda", requires_grad=True)
+    k2 = torch.randn(B, H, T, K, dtype=torch.float32, device="cuda", requires_grad=True)
+    v2 = torch.randn(B, H, T, V, dtype=torch.float32, device="cuda", requires_grad=True)
+    beta2 = torch.randn(B, H, T, dtype=torch.float32, device="cuda", requires_grad=True)
+
+    q2_opt = q2.detach().clone().requires_grad_(True)
+    k2_opt = k2.detach().clone().requires_grad_(True)
+    v2_opt = v2.detach().clone().requires_grad_(True)
+    beta2_opt = beta2.detach().clone().requires_grad_(True)
+
+    o2_base, fs2_base = frd_baseline.fused_recurrent_delta_rule(
+        q2, k2, v2, beta=beta2, initial_state=None, output_final_state=True
+    )
+    o2_opt, fs2_opt = frd_optimized.fused_recurrent_delta_rule(
+        q2_opt, k2_opt, v2_opt, beta=beta2_opt, initial_state=None, output_final_state=True
+    )
+
+    non_fwd_o_ok = torch.allclose(o2_base, o2_opt, rtol=rtol, atol=atol)
+    non_fwd_fs_ok = torch.allclose(fs2_base, fs2_opt, rtol=rtol, atol=atol)
+
+    loss2_base = o2_base.sum() + fs2_base.sum()
+    loss2_opt = o2_opt.sum() + fs2_opt.sum()
+    loss2_base.backward()
+    loss2_opt.backward()
+
+    grad_q2_ok = torch.allclose(q2.grad, q2_opt.grad, rtol=rtol, atol=atol)
+    grad_k2_ok = torch.allclose(k2.grad, k2_opt.grad, rtol=rtol, atol=atol)
+    grad_v2_ok = torch.allclose(v2.grad, v2_opt.grad, rtol=rtol, atol=atol)
+    grad_beta2_ok = torch.allclose(beta2.grad, beta2_opt.grad, rtol=rtol, atol=atol)
+
+    non_headwise_ok = non_fwd_o_ok and non_fwd_fs_ok and grad_q2_ok and grad_k2_ok and grad_v2_ok and grad_beta2_ok
+    if not non_headwise_ok:
+        if not non_fwd_o_ok:
+            print("Delta non-head forward o max diff:", torch.max(torch.abs(o2_base - o2_opt)).item())
+        if not non_fwd_fs_ok:
+            print("Delta non-head forward fs max diff:", torch.max(torch.abs(fs2_base - fs2_opt)).item())
+        if not grad_q2_ok:
+            print("Delta non-head grad_q max diff:", torch.max(torch.abs(q2.grad - q2_opt.grad)).item())
+        if not grad_k2_ok:
+            print("Delta non-head grad_k max diff:", torch.max(torch.abs(k2.grad - k2_opt.grad)).item())
+        if not grad_v2_ok:
+            print("Delta non-head grad_v max diff:", torch.max(torch.abs(v2.grad - v2_opt.grad)).item())
+        if not grad_beta2_ok:
+            print("Delta non-head grad_beta max diff:", torch.max(torch.abs(beta2.grad - beta2_opt.grad)).item())
+
+    delta_ok = headwise_ok and non_headwise_ok
+    _report("Fused recurrent delta (headwise + non-headwise)", delta_ok)
+    return delta_ok
+
+
 def main():
     diag_ok = test_diag_ssm()
     retention_ok = test_fused_recurrent_retention()
+    delta_ok = test_fused_recurrent_delta()
 
-    all_ok = diag_ok and retention_ok
+    all_ok = diag_ok and retention_ok and delta_ok
     print("\n" + "=" * 80)
     print("Overall result:", "PASSED" if all_ok else "FAILED")
     print("=" * 80)
