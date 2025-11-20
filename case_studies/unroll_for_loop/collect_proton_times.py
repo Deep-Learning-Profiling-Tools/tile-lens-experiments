@@ -15,6 +15,7 @@ CASE_DIRS = [
     "fused_recurrent_retention",
     "diag_ssm_triton",
     "fast_rope_embedding",
+    "flash_decode2_llama",
 ]
 
 

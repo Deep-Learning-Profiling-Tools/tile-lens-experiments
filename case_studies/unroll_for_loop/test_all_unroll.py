@@ -30,6 +30,10 @@ frd_optimized = _load_module("frd_optimized", "fused_recurrent_delta/optimized.p
 fre_baseline = _load_module("fre_baseline", "fast_rope_embedding/baseline.py")
 fre_optimized = _load_module("fre_optimized", "fast_rope_embedding/optimized.py")
 
+# flash_decode2_llama modules
+fdll_baseline = _load_module("fdll_baseline", "flash_decode2_llama/baseline.py")
+fdll_optimized = _load_module("fdll_optimized", "flash_decode2_llama/optimized.py")
+
 
 def _report(title: str, ok: bool):
     mark = "✓" if ok else "✗"
@@ -320,13 +324,58 @@ def test_fast_rope_embedding():
     return rope_ok
 
 
+def test_flash_decode2_llama():
+    print("\n" + "=" * 80)
+    print("Testing Flash Decode2 LLaMA Stage2 (baseline vs optimized)")
+    print("=" * 80)
+
+    torch.manual_seed(42)
+    torch.cuda.manual_seed(42)
+
+    batch_size, head_num = 2, 4
+    seq_block_num = 8  # support up to block_n_size == 8
+    head_dim = 32
+    block_seq = 8
+    rtol, atol = 1e-5, 1e-6
+
+    cases = [
+        ("block_n_size_3", torch.tensor([24, 24], dtype=torch.int32, device="cuda")),
+        ("block_n_size_4", torch.tensor([32, 32], dtype=torch.int32, device="cuda")),
+        ("block_n_size_8", torch.tensor([64, 64], dtype=torch.int32, device="cuda")),
+    ]
+
+    all_ok = True
+    for name, seqlen in cases:
+        mid = torch.randn(batch_size, head_num, seq_block_num, head_dim, dtype=torch.float32, device="cuda")
+        mid_log = torch.randn(batch_size, head_num, seq_block_num, dtype=torch.float32, device="cuda")
+
+        mid_opt = mid.clone()
+        mid_log_opt = mid_log.clone()
+
+        o_base = torch.empty(batch_size, head_num, head_dim, dtype=torch.float32, device="cuda")
+        o_opt = torch.empty_like(o_base)
+
+        fdll_baseline.flash_decode_stage2(mid, mid_log, seqlen, o_base, block_seq)
+        fdll_optimized.flash_decode_stage2(mid_opt, mid_log_opt, seqlen, o_opt, block_seq)
+
+        ok = torch.allclose(o_base, o_opt, rtol=rtol, atol=atol)
+        if not ok:
+            diff = torch.max(torch.abs(o_base - o_opt)).item()
+            print(f"{name} max diff: {diff:.2e}")
+        _report(f"Flash Decode2 LLaMA {name}", ok)
+        all_ok = all_ok and ok
+
+    return all_ok
+
+
 def main():
     diag_ok = test_diag_ssm()
     retention_ok = test_fused_recurrent_retention()
     delta_ok = test_fused_recurrent_delta()
     rope_ok = test_fast_rope_embedding()
+    flash_decode_ok = test_flash_decode2_llama()
 
-    all_ok = diag_ok and retention_ok and delta_ok and rope_ok
+    all_ok = diag_ok and retention_ok and delta_ok and rope_ok and flash_decode_ok
     print("\n" + "=" * 80)
     print("Overall result:", "PASSED" if all_ok else "FAILED")
     print("=" * 80)
