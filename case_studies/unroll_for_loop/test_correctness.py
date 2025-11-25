@@ -1,9 +1,19 @@
+import argparse
 import os
 import sys
 import importlib.util
 import torch
 
 ROOT = os.path.dirname(__file__)
+
+CASE_NAMES = [
+    "diag_ssm_triton",
+    "fused_recurrent_retention",
+    "fused_recurrent_delta",
+    "fast_rope_embedding",
+    "flash_decode2_llama",
+    "iv_dependent_matmul",
+]
 
 
 def _load_module(name: str, rel_path: str):
@@ -33,6 +43,10 @@ fre_optimized = _load_module("fre_optimized", "fast_rope_embedding/optimized.py"
 # flash_decode2_llama modules
 fdll_baseline = _load_module("fdll_baseline", "flash_decode2_llama/baseline.py")
 fdll_optimized = _load_module("fdll_optimized", "flash_decode2_llama/optimized.py")
+
+# iv_dependent_matmul modules
+ivdm_baseline = _load_module("ivdm_baseline", "iv_dependent_matmul/baseline.py")
+ivdm_optimized = _load_module("ivdm_optimized", "iv_dependent_matmul/optimized.py")
 
 
 def _report(title: str, ok: bool):
@@ -368,14 +382,93 @@ def test_flash_decode2_llama():
     return all_ok
 
 
-def main():
-    diag_ok = test_diag_ssm()
-    retention_ok = test_fused_recurrent_retention()
-    delta_ok = test_fused_recurrent_delta()
-    rope_ok = test_fast_rope_embedding()
-    flash_decode_ok = test_flash_decode2_llama()
+def test_iv_dependent_matmul():
+    print("\n" + "=" * 80)
+    print("Testing IV Dependent MatMul (baseline vs optimized)")
+    print("=" * 80)
 
-    all_ok = diag_ok and retention_ok and delta_ok and rope_ok and flash_decode_ok
+    torch.manual_seed(42)
+    torch.cuda.manual_seed(42)
+
+    M, K, N = 256, 256, 256
+    BLOCK_SIZE_M, BLOCK_SIZE_N, BLOCK_SIZE_K = 32, 32, 32
+    rtol, atol = 1e-3, 1e-3  # fp16 output needs looser tolerance
+
+    # Generate input matrices
+    a = torch.rand((M, K), device="cuda")
+    b = torch.rand((K, N), device="cuda")
+
+    # Baseline output
+    out_base = torch.empty((M, N), device="cuda")
+    grid = ((M + BLOCK_SIZE_M - 1) // BLOCK_SIZE_M * (N + BLOCK_SIZE_N - 1) // BLOCK_SIZE_N,)
+    ivdm_baseline.iv_dependent_matmul_kernel[grid](
+        a, b, out_base, M, N, K,
+        a.stride(0), a.stride(1), b.stride(0), b.stride(1),
+        out_base.stride(0), out_base.stride(1),
+        BLOCK_SIZE_M=BLOCK_SIZE_M, BLOCK_SIZE_N=BLOCK_SIZE_N, BLOCK_SIZE_K=BLOCK_SIZE_K,
+        type="pre_load",
+        num_stages=3
+    )
+
+    # Optimized output
+    out_opt = torch.empty((M, N), device="cuda")
+    ivdm_optimized.iv_dependent_matmul_kernel[grid](
+        a, b, out_opt, M, N, K,
+        a.stride(0), a.stride(1), b.stride(0), b.stride(1),
+        out_opt.stride(0), out_opt.stride(1),
+        BLOCK_SIZE_M=BLOCK_SIZE_M, BLOCK_SIZE_N=BLOCK_SIZE_N, BLOCK_SIZE_K=BLOCK_SIZE_K,
+        type="pre_load",
+        num_stages=3
+    )
+
+    fwd_ok = torch.allclose(out_base, out_opt, rtol=rtol, atol=atol)
+    if not fwd_ok:
+        diff = torch.max(torch.abs(out_base.float() - out_opt.float())).item()
+        print(f"Max diff: {diff:.2e}")
+
+    _report("IV Dependent MatMul", fwd_ok)
+    return fwd_ok
+
+
+TEST_FUNCS = {
+    "diag_ssm_triton": test_diag_ssm,
+    "fused_recurrent_retention": test_fused_recurrent_retention,
+    "fused_recurrent_delta": test_fused_recurrent_delta,
+    "fast_rope_embedding": test_fast_rope_embedding,
+    "flash_decode2_llama": test_flash_decode2_llama,
+    "iv_dependent_matmul": test_iv_dependent_matmul,
+}
+
+
+def main():
+    parser = argparse.ArgumentParser(description="Test correctness of optimized Triton kernels against baseline")
+    parser.add_argument(
+        "-c", "--case",
+        type=str,
+        choices=CASE_NAMES,
+        help="Run only the specified case (default: run all cases)",
+    )
+    parser.add_argument(
+        "-l", "--list",
+        action="store_true",
+        help="List all available cases and exit",
+    )
+    args = parser.parse_args()
+
+    if args.list:
+        print("Available cases:")
+        for name in CASE_NAMES:
+            print(f"  {name}")
+        return
+
+    cases_to_run = [args.case] if args.case else CASE_NAMES
+    results = {}
+
+    for case_name in cases_to_run:
+        test_func = TEST_FUNCS[case_name]
+        results[case_name] = test_func()
+
+    all_ok = all(results.values())
     print("\n" + "=" * 80)
     print("Overall result:", "PASSED" if all_ok else "FAILED")
     print("=" * 80)

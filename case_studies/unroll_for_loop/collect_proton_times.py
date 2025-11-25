@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 from __future__ import annotations
 
+import argparse
 import csv
 import re
 import subprocess
@@ -16,6 +17,7 @@ CASE_DIRS = [
     "diag_ssm_triton",
     "fast_rope_embedding",
     "flash_decode2_llama",
+    "iv_dependent_matmul",
 ]
 
 
@@ -90,8 +92,29 @@ def parse_kernel_times(hatchet_file: Path, kernels: Iterable[str]) -> Tuple[floa
 
 
 def main() -> None:
+    parser = argparse.ArgumentParser(description="Collect Proton profiling times for Triton kernels")
+    parser.add_argument(
+        "-c", "--case",
+        type=str,
+        choices=CASE_DIRS,
+        help="Run only the specified case (default: run all cases)",
+    )
+    parser.add_argument(
+        "-l", "--list",
+        action="store_true",
+        help="List all available cases and exit",
+    )
+    args = parser.parse_args()
+
+    if args.list:
+        print("Available cases:")
+        for name in CASE_DIRS:
+            print(f"  {name}")
+        return
+
     root = Path(__file__).resolve().parent
-    expected_dirs = [root / name for name in CASE_DIRS]
+    case_names = [args.case] if args.case else CASE_DIRS
+    expected_dirs = [root / name for name in case_names]
     subdirs = [path for path in expected_dirs if path.is_dir()]
     missing = [path.name for path in expected_dirs if not path.is_dir()]
     for name in missing:
