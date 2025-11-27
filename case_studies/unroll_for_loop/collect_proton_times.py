@@ -20,6 +20,7 @@ CASE_DIRS = [
     "iv_dependent_matmul",
     "rmsnorm_fused",
     "rmsnorm_fused_llama",
+    "rmsnorm_implementation",
 ]
 
 

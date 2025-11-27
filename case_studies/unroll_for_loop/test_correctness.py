@@ -15,6 +15,7 @@ CASE_NAMES = [
     "iv_dependent_matmul",
     "rmsnorm_fused",
     "rmsnorm_fused_llama",
+    "rmsnorm_implementation",
 ]
 
 
@@ -57,6 +58,10 @@ rmsn_optimized = _load_module("rmsn_optimized", "rmsnorm_fused/optimized.py")
 # rmsnorm_fused_llama modules
 rmsnll_baseline = _load_module("rmsnll_baseline", "rmsnorm_fused_llama/baseline.py")
 rmsnll_optimized = _load_module("rmsnll_optimized", "rmsnorm_fused_llama/optimized.py")
+
+# rmsnorm_implementation modules
+rmsni_baseline = _load_module("rmsni_baseline", "rmsnorm_implementation/baseline.py")
+rmsni_optimized = _load_module("rmsni_optimized", "rmsnorm_implementation/optimized.py")
 
 
 def _report(title: str, ok: bool):
@@ -510,6 +515,51 @@ def test_rmsnorm_fused_llama():
     return all_ok
 
 
+def test_rmsnorm_implementation():
+    print("\n" + "=" * 80)
+    print("Testing RMSNorm Implementation (baseline vs optimized)")
+    print("=" * 80)
+
+    torch.manual_seed(42)
+    torch.cuda.manual_seed(42)
+
+    rtol, atol = 1e-3, 1e-3  # fp16 output needs looser tolerance
+    all_ok = True
+    eps = 1e-6
+
+    # Test with K=4096 (optimized version has special handling)
+    batch, M, K = 2, 3, 4096
+    x = torch.randn((batch, M, K), dtype=torch.float16, device="cuda")
+    rms_weights = torch.randn((K,), dtype=torch.float16, device="cuda")
+
+    y_base = rmsni_baseline.rmsnorm_wrapper(x, rms_weights, eps)
+    y_opt = rmsni_optimized.rmsnorm_wrapper(x, rms_weights, eps)
+
+    ok = torch.allclose(y_base, y_opt, rtol=rtol, atol=atol)
+    if not ok:
+        diff = torch.max(torch.abs(y_base.float() - y_opt.float())).item()
+        print(f"K=4096 max diff: {diff:.2e}")
+    _report("RMSNorm Implementation K=4096", ok)
+    all_ok = all_ok and ok
+
+    # Test with K=8192 (optimized version has special handling)
+    K = 8192
+    x = torch.randn((batch, M, K), dtype=torch.float16, device="cuda")
+    rms_weights = torch.randn((K,), dtype=torch.float16, device="cuda")
+
+    y_base = rmsni_baseline.rmsnorm_wrapper(x, rms_weights, eps)
+    y_opt = rmsni_optimized.rmsnorm_wrapper(x, rms_weights, eps)
+
+    ok = torch.allclose(y_base, y_opt, rtol=rtol, atol=atol)
+    if not ok:
+        diff = torch.max(torch.abs(y_base.float() - y_opt.float())).item()
+        print(f"K=8192 max diff: {diff:.2e}")
+    _report("RMSNorm Implementation K=8192", ok)
+    all_ok = all_ok and ok
+
+    return all_ok
+
+
 TEST_FUNCS = {
     "diag_ssm_triton": test_diag_ssm,
     "fused_recurrent_retention": test_fused_recurrent_retention,
@@ -519,6 +569,7 @@ TEST_FUNCS = {
     "iv_dependent_matmul": test_iv_dependent_matmul,
     "rmsnorm_fused": test_rmsnorm_fused,
     "rmsnorm_fused_llama": test_rmsnorm_fused_llama,
+    "rmsnorm_implementation": test_rmsnorm_implementation,
 }
 
 
