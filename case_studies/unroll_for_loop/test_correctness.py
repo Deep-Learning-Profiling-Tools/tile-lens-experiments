@@ -13,6 +13,7 @@ CASE_NAMES = [
     "fast_rope_embedding",
     "flash_decode2_llama",
     "iv_dependent_matmul",
+    "rmsnorm_fused",
 ]
 
 
@@ -47,6 +48,10 @@ fdll_optimized = _load_module("fdll_optimized", "flash_decode2_llama/optimized.p
 # iv_dependent_matmul modules
 ivdm_baseline = _load_module("ivdm_baseline", "iv_dependent_matmul/baseline.py")
 ivdm_optimized = _load_module("ivdm_optimized", "iv_dependent_matmul/optimized.py")
+
+# rmsnorm_fused modules
+rmsn_baseline = _load_module("rmsn_baseline", "rmsnorm_fused/baseline.py")
+rmsn_optimized = _load_module("rmsn_optimized", "rmsnorm_fused/optimized.py")
 
 
 def _report(title: str, ok: bool):
@@ -430,6 +435,42 @@ def test_iv_dependent_matmul():
     return fwd_ok
 
 
+def test_rmsnorm_fused():
+    print("\n" + "=" * 80)
+    print("Testing RMSNorm Fused (baseline vs optimized)")
+    print("=" * 80)
+
+    torch.manual_seed(42)
+    torch.cuda.manual_seed(42)
+
+    rtol, atol = 1e-5, 1e-6
+    all_ok = True
+
+    test_cases = [
+        ("small_input", (2, 16)),
+        ("medium_input", (4, 256)),
+    ]
+
+    for name, shape in test_cases:
+        x = torch.randn(*shape, dtype=torch.float32, device="cuda")
+        weight = torch.ones(shape[-1], dtype=torch.float32, device="cuda")
+
+        norm_base = rmsn_baseline.TritonLlamaRMSNorm(weight)
+        norm_opt = rmsn_optimized.TritonLlamaRMSNorm(weight)
+
+        y_base = norm_base(x)
+        y_opt = norm_opt(x)
+
+        ok = torch.allclose(y_base, y_opt, rtol=rtol, atol=atol)
+        if not ok:
+            diff = torch.max(torch.abs(y_base - y_opt)).item()
+            print(f"{name} max diff: {diff:.2e}")
+        _report(f"RMSNorm Fused {name}", ok)
+        all_ok = all_ok and ok
+
+    return all_ok
+
+
 TEST_FUNCS = {
     "diag_ssm_triton": test_diag_ssm,
     "fused_recurrent_retention": test_fused_recurrent_retention,
@@ -437,6 +478,7 @@ TEST_FUNCS = {
     "fast_rope_embedding": test_fast_rope_embedding,
     "flash_decode2_llama": test_flash_decode2_llama,
     "iv_dependent_matmul": test_iv_dependent_matmul,
+    "rmsnorm_fused": test_rmsnorm_fused,
 }
 
 

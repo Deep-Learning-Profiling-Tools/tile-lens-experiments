@@ -18,6 +18,7 @@ CASE_DIRS = [
     "fast_rope_embedding",
     "flash_decode2_llama",
     "iv_dependent_matmul",
+    "rmsnorm_fused",
 ]
 
 
