@@ -20,6 +20,7 @@ CASE_NAMES = [
     "var_len_copy",
     "matmul_leakyrelu",
     "flash_decode2_phi",
+    "kldiv_ops",
 ]
 
 
@@ -82,6 +83,10 @@ mmlr_optimized = _load_module("mmlr_optimized", "matmul_leakyrelu/optimized.py")
 # flash_decode2_phi modules
 fdphi_baseline = _load_module("fdphi_baseline", "flash_decode2_phi/baseline.py")
 fdphi_optimized = _load_module("fdphi_optimized", "flash_decode2_phi/optimized.py")
+
+# kldiv_ops modules
+kldiv_baseline = _load_module("kldiv_baseline", "kldiv_ops/baseline.py")
+kldiv_optimized = _load_module("kldiv_optimized", "kldiv_ops/optimized.py")
 
 
 def _report(title: str, ok: bool):
@@ -722,6 +727,47 @@ def test_flash_decode2_phi():
     return ok
 
 
+def test_kldiv_ops():
+    print("\n" + "=" * 80)
+    print("Testing KLDiv Ops (baseline vs optimized)")
+    print("=" * 80)
+
+    torch.manual_seed(42)
+    torch.cuda.manual_seed(42)
+
+    rtol, atol = 1e-5, 1e-6
+    all_ok = True
+    eps = 1e-6
+
+    # Small input that fits in one BLOCK_SIZE iteration
+    y_pred = torch.tensor([[0.2, 0.3, 0.5], [0.1, 0.6, 0.3]], device="cuda", dtype=torch.float32).log()
+    y_true = torch.tensor([[0.1, 0.4, 0.5], [0.2, 0.5, 0.3]], device="cuda", dtype=torch.float32)
+
+    # Test forward with batchmean reduction
+    out_base = kldiv_baseline.kldiv_forward_triton(y_pred, y_true, log_target=False, reduction="batchmean", eps=eps)
+    out_opt = kldiv_optimized.kldiv_forward_triton(y_pred, y_true, log_target=False, reduction="batchmean", eps=eps)
+
+    ok = torch.allclose(out_base, out_opt, rtol=rtol, atol=atol)
+    if not ok:
+        diff = torch.abs(out_base - out_opt).item()
+        print(f"forward batchmean diff: {diff:.2e}")
+    _report("KLDiv forward (batchmean)", ok)
+    all_ok = all_ok and ok
+
+    # Test forward with none reduction
+    out_base_none = kldiv_baseline.kldiv_forward_triton(y_pred, y_true, log_target=False, reduction="none", eps=eps)
+    out_opt_none = kldiv_optimized.kldiv_forward_triton(y_pred, y_true, log_target=False, reduction="none", eps=eps)
+
+    ok_none = torch.allclose(out_base_none, out_opt_none, rtol=rtol, atol=atol)
+    if not ok_none:
+        diff = torch.max(torch.abs(out_base_none - out_opt_none)).item()
+        print(f"forward none max diff: {diff:.2e}")
+    _report("KLDiv forward (none)", ok_none)
+    all_ok = all_ok and ok_none
+
+    return all_ok
+
+
 TEST_FUNCS = {
     "diag_ssm_triton": test_diag_ssm,
     "fused_recurrent_retention": test_fused_recurrent_retention,
@@ -736,6 +782,7 @@ TEST_FUNCS = {
     "var_len_copy": test_var_len_copy,
     "matmul_leakyrelu": test_matmul_leakyrelu,
     "flash_decode2_phi": test_flash_decode2_phi,
+    "kldiv_ops": test_kldiv_ops,
 }
 
 

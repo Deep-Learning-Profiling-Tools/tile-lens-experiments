@@ -25,6 +25,7 @@ CASE_DIRS = [
     "var_len_copy",
     "matmul_leakyrelu",
     "flash_decode2_phi",
+    "kldiv_ops",
 ]
 
 
