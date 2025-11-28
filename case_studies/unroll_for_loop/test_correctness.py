@@ -19,6 +19,7 @@ CASE_NAMES = [
     "layernorm_fwd_triton",
     "var_len_copy",
     "matmul_leakyrelu",
+    "flash_decode2_phi",
 ]
 
 
@@ -77,6 +78,10 @@ vlc_optimized = _load_module("vlc_optimized", "var_len_copy/optimized.py")
 # matmul_leakyrelu modules
 mmlr_baseline = _load_module("mmlr_baseline", "matmul_leakyrelu/baseline.py")
 mmlr_optimized = _load_module("mmlr_optimized", "matmul_leakyrelu/optimized.py")
+
+# flash_decode2_phi modules
+fdphi_baseline = _load_module("fdphi_baseline", "flash_decode2_phi/baseline.py")
+fdphi_optimized = _load_module("fdphi_optimized", "flash_decode2_phi/optimized.py")
 
 
 def _report(title: str, ok: bool):
@@ -682,6 +687,41 @@ def test_matmul_leakyrelu():
     return all_ok
 
 
+def test_flash_decode2_phi():
+    print("\n" + "=" * 80)
+    print("Testing Flash Decode2 Phi Stage2 (baseline vs optimized)")
+    print("=" * 80)
+
+    torch.manual_seed(42)
+    torch.cuda.manual_seed(42)
+
+    batch_size, head_num = 2, 4
+    seq_block_num = 1  # optimized version only handles 1 iteration
+    head_dim = 64
+    block_seq = 16
+    rtol, atol = 1e-5, 1e-6
+
+    # Use seqlen that results in block_n_size = 1
+    seqlen = torch.tensor([block_seq, block_seq], dtype=torch.int32, device="cuda")
+
+    mid_out = torch.randn(batch_size, head_num, seq_block_num, head_dim, dtype=torch.float32, device="cuda")
+    mid_out_logexpsum = torch.randn(batch_size, head_num, seq_block_num, dtype=torch.float32, device="cuda")
+
+    out_base = torch.zeros(batch_size, head_num, head_dim, dtype=torch.float32, device="cuda")
+    out_opt = torch.zeros(batch_size, head_num, head_dim, dtype=torch.float32, device="cuda")
+
+    fdphi_baseline.flash_decode_stage2(mid_out, mid_out_logexpsum, seqlen, out_base, block_seq)
+    fdphi_optimized.flash_decode_stage2(mid_out, mid_out_logexpsum, seqlen, out_opt, block_seq)
+
+    ok = torch.allclose(out_base, out_opt, rtol=rtol, atol=atol)
+    if not ok:
+        diff = torch.max(torch.abs(out_base - out_opt)).item()
+        print(f"Max diff: {diff:.2e}")
+
+    _report("Flash Decode2 Phi", ok)
+    return ok
+
+
 TEST_FUNCS = {
     "diag_ssm_triton": test_diag_ssm,
     "fused_recurrent_retention": test_fused_recurrent_retention,
@@ -695,6 +735,7 @@ TEST_FUNCS = {
     "layernorm_fwd_triton": test_layernorm_fwd_triton,
     "var_len_copy": test_var_len_copy,
     "matmul_leakyrelu": test_matmul_leakyrelu,
+    "flash_decode2_phi": test_flash_decode2_phi,
 }
 
 

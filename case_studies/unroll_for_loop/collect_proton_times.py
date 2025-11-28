@@ -24,6 +24,7 @@ CASE_DIRS = [
     "layernorm_fwd_triton",
     "var_len_copy",
     "matmul_leakyrelu",
+    "flash_decode2_phi",
 ]
 
 
