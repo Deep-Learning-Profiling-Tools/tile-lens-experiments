@@ -30,6 +30,7 @@ CASE_DIRS = [
     "softmax_optimize",
     "triton_conv2d_fwd",
     "triton_matmul",
+    "matmul_triton1",
 ]
 
 
