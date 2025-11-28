@@ -29,6 +29,7 @@ CASE_DIRS = [
     "mean_reduction",
     "softmax_optimize",
     "triton_conv2d_fwd",
+    "triton_matmul",
 ]
 
 

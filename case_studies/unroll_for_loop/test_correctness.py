@@ -24,6 +24,7 @@ CASE_NAMES = [
     "mean_reduction",
     "softmax_optimize",
     "triton_conv2d_fwd",
+    "triton_matmul",
 ]
 
 
@@ -102,6 +103,10 @@ smopt_optimized = _load_module("smopt_optimized", "softmax_optimize/optimized.py
 # triton_conv2d_fwd modules
 conv2d_baseline = _load_module("conv2d_baseline", "triton_conv2d_fwd/baseline.py")
 conv2d_optimized = _load_module("conv2d_optimized", "triton_conv2d_fwd/optimized.py")
+
+# triton_matmul modules
+trmm_baseline = _load_module("trmm_baseline", "triton_matmul/baseline.py")
+trmm_optimized = _load_module("trmm_optimized", "triton_matmul/optimized.py")
 
 
 def _report(title: str, ok: bool):
@@ -894,6 +899,35 @@ def test_triton_conv2d_fwd():
     return all_ok
 
 
+def test_triton_matmul():
+    print("\n" + "=" * 80)
+    print("Testing Triton MatMul (baseline vs optimized)")
+    print("=" * 80)
+
+    torch.manual_seed(42)
+    torch.cuda.manual_seed(42)
+
+    rtol, atol = 1e-3, 1e-3  # fp16 output
+    all_ok = True
+
+    # M=256, K=128, N=256 with BLOCK_SIZE_K=64 -> 2 iterations (matches unrolled version)
+    M, K, N = 256, 128, 256
+    a = torch.randn((M, K), dtype=torch.float16, device="cuda")
+    b = torch.randn((K, N), dtype=torch.float16, device="cuda")
+
+    c_base = trmm_baseline.matmul(a, b)
+    c_opt = trmm_optimized.matmul(a, b)
+
+    ok = torch.allclose(c_base, c_opt, rtol=rtol, atol=atol)
+    if not ok:
+        diff = torch.max(torch.abs(c_base.float() - c_opt.float())).item()
+        print(f"Max diff: {diff:.2e}")
+    _report("Triton MatMul fp16", ok)
+    all_ok = all_ok and ok
+
+    return all_ok
+
+
 TEST_FUNCS = {
     "diag_ssm_triton": test_diag_ssm,
     "fused_recurrent_retention": test_fused_recurrent_retention,
@@ -912,6 +946,7 @@ TEST_FUNCS = {
     "mean_reduction": test_mean_reduction,
     "softmax_optimize": test_softmax_optimize,
     "triton_conv2d_fwd": test_triton_conv2d_fwd,
+    "triton_matmul": test_triton_matmul,
 }
 
 
