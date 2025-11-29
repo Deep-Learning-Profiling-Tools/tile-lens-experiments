@@ -3,31 +3,39 @@ import os
 import sys
 import importlib.util
 import torch
+from typing import Dict, List, Callable
 
 ROOT = os.path.dirname(__file__)
 
-CASE_NAMES = [
-    "diag_ssm_triton",
-    "fused_recurrent_retention",
-    "fused_recurrent_delta",
-    "fast_rope_embedding",
-    "flash_decode2_llama",
-    "iv_dependent_matmul",
-    "rmsnorm_fused",
-    "rmsnorm_fused_llama",
-    "rmsnorm_implementation",
-    "layernorm_fwd_triton",
-    "var_len_copy",
-    "matmul_leakyrelu",
-    "flash_decode2_phi",
-    "kldiv_ops",
-    "mean_reduction",
-    "softmax_optimize",
-    "triton_conv2d_fwd",
-    "triton_matmul",
-    "matmul_triton1",
-    "lora_expand_gemv",
-]
+STUDY_CASES: Dict[str, List[str]] = {
+    "unroll_for_loop": [
+        "diag_ssm_triton",
+        "fused_recurrent_retention",
+        "fused_recurrent_delta",
+        "fast_rope_embedding",
+        "flash_decode2_llama",
+        "iv_dependent_matmul",
+        "rmsnorm_fused",
+        "rmsnorm_fused_llama",
+        "rmsnorm_implementation",
+        "layernorm_fwd_triton",
+        "var_len_copy",
+        "matmul_leakyrelu",
+        "flash_decode2_phi",
+        "kldiv_ops",
+        "mean_reduction",
+        "softmax_optimize",
+        "triton_conv2d_fwd",
+        "triton_matmul",
+        "matmul_triton1",
+        "lora_expand_gemv",
+    ],
+    "mask_percentage": [
+        "quantize_kv_transform",
+    ],
+}
+
+STUDY_NAMES = list(STUDY_CASES.keys())
 
 
 def _load_module(name: str, rel_path: str):
@@ -38,91 +46,84 @@ def _load_module(name: str, rel_path: str):
     return module
 
 
-# diag_ssm_triton modules
-diag_baseline = _load_module("diag_ssm_baseline", "diag_ssm_triton/baseline.py")
-diag_optimized = _load_module("diag_ssm_optimized", "diag_ssm_triton/optimized.py")
+# ============================================================================
+# unroll_for_loop modules
+# ============================================================================
+diag_baseline = _load_module("diag_ssm_baseline", "unroll_for_loop/diag_ssm_triton/baseline.py")
+diag_optimized = _load_module("diag_ssm_optimized", "unroll_for_loop/diag_ssm_triton/optimized.py")
 
-# fused_recurrent_retention modules
-fr_baseline = _load_module("frr_baseline", "fused_recurrent_retention/baseline.py")
-fr_optimized = _load_module("frr_optimized", "fused_recurrent_retention/optimized.py")
+fr_baseline = _load_module("frr_baseline", "unroll_for_loop/fused_recurrent_retention/baseline.py")
+fr_optimized = _load_module("frr_optimized", "unroll_for_loop/fused_recurrent_retention/optimized.py")
 
-# fused_recurrent_delta modules
-frd_baseline = _load_module("frd_baseline", "fused_recurrent_delta/baseline.py")
-frd_optimized = _load_module("frd_optimized", "fused_recurrent_delta/optimized.py")
+frd_baseline = _load_module("frd_baseline", "unroll_for_loop/fused_recurrent_delta/baseline.py")
+frd_optimized = _load_module("frd_optimized", "unroll_for_loop/fused_recurrent_delta/optimized.py")
 
-# fast_rope_embedding modules
-fre_baseline = _load_module("fre_baseline", "fast_rope_embedding/baseline.py")
-fre_optimized = _load_module("fre_optimized", "fast_rope_embedding/optimized.py")
+fre_baseline = _load_module("fre_baseline", "unroll_for_loop/fast_rope_embedding/baseline.py")
+fre_optimized = _load_module("fre_optimized", "unroll_for_loop/fast_rope_embedding/optimized.py")
 
-# flash_decode2_llama modules
-fdll_baseline = _load_module("fdll_baseline", "flash_decode2_llama/baseline.py")
-fdll_optimized = _load_module("fdll_optimized", "flash_decode2_llama/optimized.py")
+fdll_baseline = _load_module("fdll_baseline", "unroll_for_loop/flash_decode2_llama/baseline.py")
+fdll_optimized = _load_module("fdll_optimized", "unroll_for_loop/flash_decode2_llama/optimized.py")
 
-# iv_dependent_matmul modules
-ivdm_baseline = _load_module("ivdm_baseline", "iv_dependent_matmul/baseline.py")
-ivdm_optimized = _load_module("ivdm_optimized", "iv_dependent_matmul/optimized.py")
+ivdm_baseline = _load_module("ivdm_baseline", "unroll_for_loop/iv_dependent_matmul/baseline.py")
+ivdm_optimized = _load_module("ivdm_optimized", "unroll_for_loop/iv_dependent_matmul/optimized.py")
 
-# rmsnorm_fused modules
-rmsn_baseline = _load_module("rmsn_baseline", "rmsnorm_fused/baseline.py")
-rmsn_optimized = _load_module("rmsn_optimized", "rmsnorm_fused/optimized.py")
+rmsn_baseline = _load_module("rmsn_baseline", "unroll_for_loop/rmsnorm_fused/baseline.py")
+rmsn_optimized = _load_module("rmsn_optimized", "unroll_for_loop/rmsnorm_fused/optimized.py")
 
-# rmsnorm_fused_llama modules
-rmsnll_baseline = _load_module("rmsnll_baseline", "rmsnorm_fused_llama/baseline.py")
-rmsnll_optimized = _load_module("rmsnll_optimized", "rmsnorm_fused_llama/optimized.py")
+rmsnll_baseline = _load_module("rmsnll_baseline", "unroll_for_loop/rmsnorm_fused_llama/baseline.py")
+rmsnll_optimized = _load_module("rmsnll_optimized", "unroll_for_loop/rmsnorm_fused_llama/optimized.py")
 
-# rmsnorm_implementation modules
-rmsni_baseline = _load_module("rmsni_baseline", "rmsnorm_implementation/baseline.py")
-rmsni_optimized = _load_module("rmsni_optimized", "rmsnorm_implementation/optimized.py")
+rmsni_baseline = _load_module("rmsni_baseline", "unroll_for_loop/rmsnorm_implementation/baseline.py")
+rmsni_optimized = _load_module("rmsni_optimized", "unroll_for_loop/rmsnorm_implementation/optimized.py")
 
-# layernorm_fwd_triton modules
-lnfwd_baseline = _load_module("lnfwd_baseline", "layernorm_fwd_triton/baseline.py")
-lnfwd_optimized = _load_module("lnfwd_optimized", "layernorm_fwd_triton/optimized.py")
+lnfwd_baseline = _load_module("lnfwd_baseline", "unroll_for_loop/layernorm_fwd_triton/baseline.py")
+lnfwd_optimized = _load_module("lnfwd_optimized", "unroll_for_loop/layernorm_fwd_triton/optimized.py")
 
-# var_len_copy modules
-vlc_baseline = _load_module("vlc_baseline", "var_len_copy/baseline.py")
-vlc_optimized = _load_module("vlc_optimized", "var_len_copy/optimized.py")
+vlc_baseline = _load_module("vlc_baseline", "unroll_for_loop/var_len_copy/baseline.py")
+vlc_optimized = _load_module("vlc_optimized", "unroll_for_loop/var_len_copy/optimized.py")
 
-# matmul_leakyrelu modules
-mmlr_baseline = _load_module("mmlr_baseline", "matmul_leakyrelu/baseline.py")
-mmlr_optimized = _load_module("mmlr_optimized", "matmul_leakyrelu/optimized.py")
+mmlr_baseline = _load_module("mmlr_baseline", "unroll_for_loop/matmul_leakyrelu/baseline.py")
+mmlr_optimized = _load_module("mmlr_optimized", "unroll_for_loop/matmul_leakyrelu/optimized.py")
 
-# flash_decode2_phi modules
-fdphi_baseline = _load_module("fdphi_baseline", "flash_decode2_phi/baseline.py")
-fdphi_optimized = _load_module("fdphi_optimized", "flash_decode2_phi/optimized.py")
+fdphi_baseline = _load_module("fdphi_baseline", "unroll_for_loop/flash_decode2_phi/baseline.py")
+fdphi_optimized = _load_module("fdphi_optimized", "unroll_for_loop/flash_decode2_phi/optimized.py")
 
-# kldiv_ops modules
-kldiv_baseline = _load_module("kldiv_baseline", "kldiv_ops/baseline.py")
-kldiv_optimized = _load_module("kldiv_optimized", "kldiv_ops/optimized.py")
+kldiv_baseline = _load_module("kldiv_baseline", "unroll_for_loop/kldiv_ops/baseline.py")
+kldiv_optimized = _load_module("kldiv_optimized", "unroll_for_loop/kldiv_ops/optimized.py")
 
-# mean_reduction modules
-meanred_baseline = _load_module("meanred_baseline", "mean_reduction/baseline.py")
-meanred_optimized = _load_module("meanred_optimized", "mean_reduction/optimized.py")
+meanred_baseline = _load_module("meanred_baseline", "unroll_for_loop/mean_reduction/baseline.py")
+meanred_optimized = _load_module("meanred_optimized", "unroll_for_loop/mean_reduction/optimized.py")
 
-# softmax_optimize modules
-smopt_baseline = _load_module("smopt_baseline", "softmax_optimize/baseline.py")
-smopt_optimized = _load_module("smopt_optimized", "softmax_optimize/optimized.py")
+smopt_baseline = _load_module("smopt_baseline", "unroll_for_loop/softmax_optimize/baseline.py")
+smopt_optimized = _load_module("smopt_optimized", "unroll_for_loop/softmax_optimize/optimized.py")
 
-# triton_conv2d_fwd modules
-conv2d_baseline = _load_module("conv2d_baseline", "triton_conv2d_fwd/baseline.py")
-conv2d_optimized = _load_module("conv2d_optimized", "triton_conv2d_fwd/optimized.py")
+conv2d_baseline = _load_module("conv2d_baseline", "unroll_for_loop/triton_conv2d_fwd/baseline.py")
+conv2d_optimized = _load_module("conv2d_optimized", "unroll_for_loop/triton_conv2d_fwd/optimized.py")
 
-# triton_matmul modules
-trmm_baseline = _load_module("trmm_baseline", "triton_matmul/baseline.py")
-trmm_optimized = _load_module("trmm_optimized", "triton_matmul/optimized.py")
+trmm_baseline = _load_module("trmm_baseline", "unroll_for_loop/triton_matmul/baseline.py")
+trmm_optimized = _load_module("trmm_optimized", "unroll_for_loop/triton_matmul/optimized.py")
 
-# matmul_triton1 modules
-mm1_baseline = _load_module("mm1_baseline", "matmul_triton1/baseline.py")
-mm1_optimized = _load_module("mm1_optimized", "matmul_triton1/optimized.py")
+mm1_baseline = _load_module("mm1_baseline", "unroll_for_loop/matmul_triton1/baseline.py")
+mm1_optimized = _load_module("mm1_optimized", "unroll_for_loop/matmul_triton1/optimized.py")
 
-# lora_expand_gemv modules
-lora_baseline = _load_module("lora_baseline", "lora_expand_gemv/baseline.py")
-lora_optimized = _load_module("lora_optimized", "lora_expand_gemv/optimized.py")
+lora_baseline = _load_module("lora_baseline", "unroll_for_loop/lora_expand_gemv/baseline.py")
+lora_optimized = _load_module("lora_optimized", "unroll_for_loop/lora_expand_gemv/optimized.py")
+
+# ============================================================================
+# mask_percentage modules
+# ============================================================================
+qkv_baseline = _load_module("qkv_baseline", "mask_percentage/quantize_kv_transform/baseline.py")
+qkv_optimized = _load_module("qkv_optimized", "mask_percentage/quantize_kv_transform/optimized.py")
 
 
 def _report(title: str, ok: bool):
     mark = "✓" if ok else "✗"
     print(f"{mark} {title}: {'PASSED' if ok else 'FAILED'}")
 
+
+# ============================================================================
+# unroll_for_loop tests
+# ============================================================================
 
 def test_diag_ssm():
     print("\n" + "=" * 80)
@@ -1003,59 +1004,173 @@ def test_lora_expand_gemv():
     return all_ok
 
 
-TEST_FUNCS = {
-    "diag_ssm_triton": test_diag_ssm,
-    "fused_recurrent_retention": test_fused_recurrent_retention,
-    "fused_recurrent_delta": test_fused_recurrent_delta,
-    "fast_rope_embedding": test_fast_rope_embedding,
-    "flash_decode2_llama": test_flash_decode2_llama,
-    "iv_dependent_matmul": test_iv_dependent_matmul,
-    "rmsnorm_fused": test_rmsnorm_fused,
-    "rmsnorm_fused_llama": test_rmsnorm_fused_llama,
-    "rmsnorm_implementation": test_rmsnorm_implementation,
-    "layernorm_fwd_triton": test_layernorm_fwd_triton,
-    "var_len_copy": test_var_len_copy,
-    "matmul_leakyrelu": test_matmul_leakyrelu,
-    "flash_decode2_phi": test_flash_decode2_phi,
-    "kldiv_ops": test_kldiv_ops,
-    "mean_reduction": test_mean_reduction,
-    "softmax_optimize": test_softmax_optimize,
-    "triton_conv2d_fwd": test_triton_conv2d_fwd,
-    "triton_matmul": test_triton_matmul,
-    "matmul_triton1": test_matmul_triton1,
-    "lora_expand_gemv": test_lora_expand_gemv,
+# ============================================================================
+# mask_percentage tests
+# ============================================================================
+
+def test_quantize_kv_transform():
+    print("\n" + "=" * 80)
+    print("Testing Quantize KV Transform (baseline vs optimized)")
+    print("=" * 80)
+
+    torch.manual_seed(42)
+    torch.cuda.manual_seed(42)
+
+    rtol, atol = 1e-5, 1e-6
+    all_ok = True
+
+    test_cases = [
+        ("B=32, N_CTX=1024, H=12, D=96", 32, 1024, 12, 96),
+        ("B=16, N_CTX=512, H=8, D=64", 16, 512, 8, 64),
+        ("B=1, N_CTX=1, H=1, D=1", 1, 1, 1, 1),
+    ]
+
+    for name, B, N_CTX, H, D in test_cases:
+        src = torch.randn((B * N_CTX, H, D), dtype=torch.float16, device="cuda")
+        dest_loc = torch.arange(0, B * N_CTX, dtype=torch.int32, device="cuda")
+
+        # Baseline outputs
+        value_dest_base = torch.zeros((B * N_CTX, H, D), dtype=torch.int8, device="cuda")
+        scale_dest_base = torch.zeros((B * N_CTX, H, 1), dtype=torch.float16, device="cuda")
+
+        # Optimized outputs
+        value_dest_opt = torch.zeros((B * N_CTX, H, D), dtype=torch.int8, device="cuda")
+        scale_dest_opt = torch.zeros((B * N_CTX, H, 1), dtype=torch.float16, device="cuda")
+
+        qkv_baseline.destindex_copy_quantize_kv(src, dest_loc, value_dest_base, scale_dest_base)
+        qkv_optimized.destindex_copy_quantize_kv(src, dest_loc, value_dest_opt, scale_dest_opt)
+
+        value_ok = torch.equal(value_dest_base, value_dest_opt)
+        scale_ok = torch.allclose(scale_dest_base, scale_dest_opt, rtol=rtol, atol=atol)
+
+        ok = value_ok and scale_ok
+        if not ok:
+            if not value_ok:
+                diff_count = (value_dest_base != value_dest_opt).sum().item()
+                print(f"{name} value mismatch count: {diff_count}")
+            if not scale_ok:
+                diff = torch.max(torch.abs(scale_dest_base.float() - scale_dest_opt.float())).item()
+                print(f"{name} scale max diff: {diff:.2e}")
+        _report(f"Quantize KV Transform {name}", ok)
+        all_ok = all_ok and ok
+
+    return all_ok
+
+
+# ============================================================================
+# Test registry organized by study
+# ============================================================================
+
+STUDY_TEST_FUNCS: Dict[str, Dict[str, Callable[[], bool]]] = {
+    "unroll_for_loop": {
+        "diag_ssm_triton": test_diag_ssm,
+        "fused_recurrent_retention": test_fused_recurrent_retention,
+        "fused_recurrent_delta": test_fused_recurrent_delta,
+        "fast_rope_embedding": test_fast_rope_embedding,
+        "flash_decode2_llama": test_flash_decode2_llama,
+        "iv_dependent_matmul": test_iv_dependent_matmul,
+        "rmsnorm_fused": test_rmsnorm_fused,
+        "rmsnorm_fused_llama": test_rmsnorm_fused_llama,
+        "rmsnorm_implementation": test_rmsnorm_implementation,
+        "layernorm_fwd_triton": test_layernorm_fwd_triton,
+        "var_len_copy": test_var_len_copy,
+        "matmul_leakyrelu": test_matmul_leakyrelu,
+        "flash_decode2_phi": test_flash_decode2_phi,
+        "kldiv_ops": test_kldiv_ops,
+        "mean_reduction": test_mean_reduction,
+        "softmax_optimize": test_softmax_optimize,
+        "triton_conv2d_fwd": test_triton_conv2d_fwd,
+        "triton_matmul": test_triton_matmul,
+        "matmul_triton1": test_matmul_triton1,
+        "lora_expand_gemv": test_lora_expand_gemv,
+    },
+    "mask_percentage": {
+        "quantize_kv_transform": test_quantize_kv_transform,
+    },
 }
+
+
+def get_all_cases() -> List[str]:
+    """Return all case names across all studies."""
+    all_cases = []
+    for cases in STUDY_CASES.values():
+        all_cases.extend(cases)
+    return all_cases
+
+
+def find_studies_for_case(case_name: str) -> List[str]:
+    """Return list of studies that contain the given case."""
+    return [study for study, cases in STUDY_CASES.items() if case_name in cases]
 
 
 def main():
     parser = argparse.ArgumentParser(description="Test correctness of optimized Triton kernels against baseline")
     parser.add_argument(
+        "-s", "--study",
+        type=str,
+        choices=STUDY_NAMES + ["all"],
+        default="all",
+        help="Study to run (default: all)",
+    )
+    parser.add_argument(
         "-c", "--case",
         type=str,
-        choices=CASE_NAMES,
-        help="Run only the specified case (default: run all cases)",
+        choices=get_all_cases(),
+        help="Run only the specified case (default: run all cases in selected study)",
     )
     parser.add_argument(
         "-l", "--list",
         action="store_true",
-        help="List all available cases and exit",
+        help="List all available studies and cases, then exit",
     )
     args = parser.parse_args()
 
     if args.list:
-        print("Available cases:")
-        for name in CASE_NAMES:
-            print(f"  {name}")
+        print("Available studies and cases:")
+        for study_name, cases in STUDY_CASES.items():
+            print(f"\n{study_name}:")
+            for case in cases:
+                print(f"  {case}")
         return
 
-    cases_to_run = [args.case] if args.case else CASE_NAMES
-    results = {}
+    # Determine which studies to run
+    if args.study == "all":
+        studies_to_run = STUDY_NAMES
+    else:
+        studies_to_run = [args.study]
 
-    for case_name in cases_to_run:
-        test_func = TEST_FUNCS[case_name]
-        results[case_name] = test_func()
+    # If a specific case is given, find which study it belongs to
+    if args.case:
+        matching_studies = find_studies_for_case(args.case)
+        if args.study != "all":
+            # User specified both --study and --case, use the specified study
+            if args.study not in matching_studies:
+                print(f"Error: case '{args.case}' not found in study '{args.study}'", file=sys.stderr)
+                sys.exit(1)
+            studies_to_run = [args.study]
+        elif len(matching_studies) > 1:
+            # Case exists in multiple studies, require explicit --study
+            print(f"Error: case '{args.case}' exists in multiple studies: {', '.join(matching_studies)}", file=sys.stderr)
+            print(f"Please specify --study to disambiguate, e.g.: -s {matching_studies[0]} -c {args.case}", file=sys.stderr)
+            sys.exit(1)
+        else:
+            studies_to_run = matching_studies
 
-    all_ok = all(results.values())
+    all_results = {}
+
+    for study_name in studies_to_run:
+        print(f"\n{'=' * 80}")
+        print(f"Study: {study_name}")
+        print('=' * 80)
+
+        test_funcs = STUDY_TEST_FUNCS[study_name]
+        cases_to_run = [args.case] if args.case and args.case in STUDY_CASES[study_name] else STUDY_CASES[study_name]
+
+        for case_name in cases_to_run:
+            if case_name in test_funcs:
+                all_results[f"{study_name}/{case_name}"] = test_funcs[case_name]()
+
+    all_ok = all(all_results.values())
     print("\n" + "=" * 80)
     print("Overall result:", "PASSED" if all_ok else "FAILED")
     print("=" * 80)
