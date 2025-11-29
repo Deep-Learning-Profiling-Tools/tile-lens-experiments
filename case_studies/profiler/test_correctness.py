@@ -34,6 +34,7 @@ STUDY_CASES: Dict[str, List[str]] = {
         "quantize_kv_transform",
         "context_attn_llama",
         "context_attn_fwd",
+        "bgmv_shrink_kernel",
     ],
 }
 
@@ -122,6 +123,9 @@ ctx_attn_optimized = _load_module("ctx_attn_optimized", "mask_percentage/context
 
 ctx_fwd_baseline = _load_module("ctx_fwd_baseline", "mask_percentage/context_attn_fwd/baseline.py")
 ctx_fwd_optimized = _load_module("ctx_fwd_optimized", "mask_percentage/context_attn_fwd/optimized.py")
+
+bgmv_shrink_baseline = _load_module("bgmv_shrink_baseline", "mask_percentage/bgmv_shrink_kernel/baseline.py")
+bgmv_shrink_optimized = _load_module("bgmv_shrink_optimized", "mask_percentage/bgmv_shrink_kernel/optimized.py")
 
 
 def _report(title: str, ok: bool):
@@ -1165,6 +1169,43 @@ def test_context_attn_fwd():
     return all_ok
 
 
+def test_bgmv_shrink_kernel():
+    print("\n" + "=" * 80)
+    print("Testing BGMV Shrink Kernel (baseline vs optimized)")
+    print("=" * 80)
+
+    torch.manual_seed(42)
+    torch.cuda.manual_seed(42)
+
+    rtol, atol = 1e-2, 1e-2  # fp16 output
+    all_ok = True
+
+    batch_size = 4
+    N = 16
+    K = 64
+    lora_num = 3
+    scaling = 1.0
+
+    inputs = torch.randn((batch_size, K), dtype=torch.float16, device="cuda")
+    lora_a_weights = torch.randn((lora_num, N, K), dtype=torch.float16, device="cuda")
+    lora_indices_tensor = torch.tensor([0, 1, -1, 2], dtype=torch.int32, device="cuda")
+
+    output_base = torch.zeros((batch_size, N), dtype=torch.float16, device="cuda")
+    output_opt = torch.zeros((batch_size, N), dtype=torch.float16, device="cuda")
+
+    bgmv_shrink_baseline._bgmv_shrink(inputs, lora_a_weights, output_base, lora_indices_tensor, scaling)
+    bgmv_shrink_optimized._bgmv_shrink(inputs, lora_a_weights, output_opt, lora_indices_tensor, scaling)
+
+    ok = torch.allclose(output_base, output_opt, rtol=rtol, atol=atol)
+    if not ok:
+        diff = torch.max(torch.abs(output_base.float() - output_opt.float())).item()
+        print(f"Max diff: {diff:.2e}")
+    _report("BGMV Shrink Kernel", ok)
+    all_ok = all_ok and ok
+
+    return all_ok
+
+
 # ============================================================================
 # Test registry organized by study
 # ============================================================================
@@ -1196,6 +1237,7 @@ STUDY_TEST_FUNCS: Dict[str, Dict[str, Callable[[], bool]]] = {
         "quantize_kv_transform": test_quantize_kv_transform,
         "context_attn_llama": test_context_attn_llama,
         "context_attn_fwd": test_context_attn_fwd,
+        "bgmv_shrink_kernel": test_bgmv_shrink_kernel,
     },
 }
 
