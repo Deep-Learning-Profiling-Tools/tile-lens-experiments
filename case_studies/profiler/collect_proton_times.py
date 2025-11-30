@@ -44,6 +44,7 @@ STUDY_CASES: Dict[str, List[str]] = {
         "rmsnorm_fused_llama",
         "relu_triton_kernel",
         "lora_expand_gemv",
+        "bgmv_expand_slice",
     ],
 }
 

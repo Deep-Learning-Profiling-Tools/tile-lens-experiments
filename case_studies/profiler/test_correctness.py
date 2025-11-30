@@ -40,6 +40,7 @@ STUDY_CASES: Dict[str, List[str]] = {
         "rmsnorm_fused_llama",
         "relu_triton_kernel",
         "lora_expand_gemv",
+        "bgmv_expand_slice",
     ],
 }
 
@@ -145,6 +146,8 @@ relu_kernel_baseline = _load_module("relu_kernel_baseline", "mask_percentage/rel
 relu_kernel_optimized = _load_module("relu_kernel_optimized", "mask_percentage/relu_triton_kernel/optimized.py")
 mp_lora_expand_gemv_baseline = _load_module("mp_lora_expand_gemv_baseline", "mask_percentage/lora_expand_gemv/baseline.py")
 mp_lora_expand_gemv_optimized = _load_module("mp_lora_expand_gemv_optimized", "mask_percentage/lora_expand_gemv/optimized.py")
+bgmv_expand_slice_baseline = _load_module("bgmv_expand_slice_baseline", "mask_percentage/bgmv_expand_slice/baseline.py")
+bgmv_expand_slice_optimized = _load_module("bgmv_expand_slice_optimized", "mask_percentage/bgmv_expand_slice/optimized.py")
 
 
 def _report(title: str, ok: bool):
@@ -1389,6 +1392,45 @@ def test_mp_lora_expand_gemv():
     return all_ok
 
 
+def test_bgmv_expand_slice():
+    print("\n" + "=" * 80)
+    print("Testing BGMV Expand Slice (baseline vs optimized)")
+    print("=" * 80)
+
+    torch.manual_seed(42)
+    torch.cuda.manual_seed(42)
+
+    rtol, atol = 1e-2, 1e-3
+    all_ok = True
+
+    test_cases = [
+        ("batch4_hidden128_rank64", 4, 128, 64, 3),
+        ("batch8_hidden256_rank32", 8, 256, 32, 4),
+    ]
+
+    for name, batch_size, hidden_size, rank, lora_num in test_cases:
+        inputs = torch.randn(batch_size, hidden_size, dtype=torch.float16, device="cuda").contiguous()
+        lora_b_weights = torch.randn(lora_num, rank, hidden_size, dtype=torch.float16, device="cuda").contiguous()
+        lora_indices = torch.randint(0, lora_num, (batch_size,), dtype=torch.int32, device="cuda")
+        slice_offset = 0
+        slice_size = rank
+
+        out_base = torch.zeros(batch_size, rank, dtype=torch.float16, device="cuda").contiguous()
+        out_opt = torch.zeros(batch_size, rank, dtype=torch.float16, device="cuda").contiguous()
+
+        bgmv_expand_slice_baseline._bgmv_expand_slice(inputs, lora_b_weights, out_base, lora_indices, slice_offset, slice_size, add_inputs=False)
+        bgmv_expand_slice_optimized._bgmv_expand_slice(inputs, lora_b_weights, out_opt, lora_indices, slice_offset, slice_size, add_inputs=False)
+
+        ok = torch.allclose(out_base, out_opt, rtol=rtol, atol=atol)
+        if not ok:
+            diff = torch.max(torch.abs(out_base - out_opt)).item()
+            print(f"{name} max diff: {diff:.2e}")
+        _report(f"BGMV Expand Slice {name}", ok)
+        all_ok = all_ok and ok
+
+    return all_ok
+
+
 # ============================================================================
 # Test registry organized by study
 # ============================================================================
@@ -1426,6 +1468,7 @@ STUDY_TEST_FUNCS: Dict[str, Dict[str, Callable[[], bool]]] = {
         "rmsnorm_fused_llama": test_mp_rmsnorm_fused_llama,
         "relu_triton_kernel": test_relu_triton_kernel,
         "lora_expand_gemv": test_mp_lora_expand_gemv,
+        "bgmv_expand_slice": test_bgmv_expand_slice,
     },
 }
 
