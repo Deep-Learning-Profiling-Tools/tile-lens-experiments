@@ -42,6 +42,7 @@ STUDY_CASES: Dict[str, List[str]] = {
         "lora_expand_gemv",
         "bgmv_expand_slice",
         "dropout_triton",
+        "fifth_order_sph_harmonics",
     ],
 }
 
@@ -151,6 +152,8 @@ bgmv_expand_slice_baseline = _load_module("bgmv_expand_slice_baseline", "mask_pe
 bgmv_expand_slice_optimized = _load_module("bgmv_expand_slice_optimized", "mask_percentage/bgmv_expand_slice/optimized.py")
 dropout_triton_baseline = _load_module("dropout_triton_baseline", "mask_percentage/dropout_triton/baseline.py")
 dropout_triton_optimized = _load_module("dropout_triton_optimized", "mask_percentage/dropout_triton/optimized.py")
+fifth_order_sph_baseline = _load_module("fifth_order_sph_baseline", "mask_percentage/fifth_order_sph_harmonics/baseline.py")
+fifth_order_sph_optimized = _load_module("fifth_order_sph_optimized", "mask_percentage/fifth_order_sph_harmonics/optimized.py")
 
 
 def _report(title: str, ok: bool):
@@ -1468,6 +1471,39 @@ def test_dropout_triton():
     return all_ok
 
 
+def test_fifth_order_sph_harmonics():
+    print("\n" + "=" * 80)
+    print("Testing Fifth Order Spherical Harmonics (baseline vs optimized)")
+    print("=" * 80)
+
+    torch.manual_seed(42)
+    torch.cuda.manual_seed(42)
+
+    rtol, atol = 1e-5, 1e-6
+    all_ok = True
+
+    test_cases = [
+        ("batch128_block64", 128, 64),
+        ("batch256_block32", 256, 32),
+        ("batch64_block128", 64, 128),
+    ]
+
+    for name, batch_size, block_size in test_cases:
+        coords = torch.randn(batch_size, 3, device="cuda", dtype=torch.float32)
+
+        out_base = fifth_order_sph_baseline.FifthOrderSphericalHarmonic.apply(coords, None, None, block_size, 0)
+        out_opt = fifth_order_sph_optimized.FifthOrderSphericalHarmonic.apply(coords, None, None, block_size, 0)
+
+        ok = torch.allclose(out_base, out_opt, rtol=rtol, atol=atol)
+        if not ok:
+            diff = torch.max(torch.abs(out_base - out_opt)).item()
+            print(f"{name} max diff: {diff:.2e}")
+        _report(f"Fifth Order SPH {name}", ok)
+        all_ok = all_ok and ok
+
+    return all_ok
+
+
 # ============================================================================
 # Test registry organized by study
 # ============================================================================
@@ -1507,6 +1543,7 @@ STUDY_TEST_FUNCS: Dict[str, Dict[str, Callable[[], bool]]] = {
         "lora_expand_gemv": test_mp_lora_expand_gemv,
         "bgmv_expand_slice": test_bgmv_expand_slice,
         "dropout_triton": test_dropout_triton,
+        "fifth_order_sph_harmonics": test_fifth_order_sph_harmonics,
     },
 }
 
