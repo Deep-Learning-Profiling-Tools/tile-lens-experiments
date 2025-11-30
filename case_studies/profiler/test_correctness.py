@@ -38,6 +38,7 @@ STUDY_CASES: Dict[str, List[str]] = {
         "sin_kernel",
         "add_value",
         "rmsnorm_fused_llama",
+        "relu_triton_kernel",
     ],
 }
 
@@ -138,6 +139,9 @@ add_value_optimized = _load_module("add_value_optimized", "mask_percentage/add_v
 
 mp_rmsnorm_baseline = _load_module("mp_rmsnorm_baseline", "mask_percentage/rmsnorm_fused_llama/baseline.py")
 mp_rmsnorm_optimized = _load_module("mp_rmsnorm_optimized", "mask_percentage/rmsnorm_fused_llama/optimized.py")
+
+relu_kernel_baseline = _load_module("relu_kernel_baseline", "mask_percentage/relu_triton_kernel/baseline.py")
+relu_kernel_optimized = _load_module("relu_kernel_optimized", "mask_percentage/relu_triton_kernel/optimized.py")
 
 
 def _report(title: str, ok: bool):
@@ -1314,6 +1318,37 @@ def test_mp_rmsnorm_fused_llama():
     return all_ok
 
 
+def test_relu_triton_kernel():
+    print("\n" + "=" * 80)
+    print("Testing ReLU Triton Kernel (baseline vs optimized)")
+    print("=" * 80)
+
+    torch.manual_seed(42)
+    torch.cuda.manual_seed(42)
+
+    rtol, atol = 1e-5, 1e-6
+    all_ok = True
+
+    test_cases = [
+        ("small", torch.randn(16, device="cuda")),
+        ("medium", torch.randn(1024, device="cuda")),
+        ("mixed", torch.tensor([-3.0, -1.0, 0.0, 2.0, 5.0], device="cuda")),
+    ]
+
+    for name, x in test_cases:
+        y_base = relu_kernel_baseline.relu(x)
+        y_opt = relu_kernel_optimized.relu(x)
+
+        ok = torch.allclose(y_base, y_opt, rtol=rtol, atol=atol)
+        if not ok:
+            diff = torch.max(torch.abs(y_base - y_opt)).item()
+            print(f"{name} max diff: {diff:.2e}")
+        _report(f"ReLU Kernel {name}", ok)
+        all_ok = all_ok and ok
+
+    return all_ok
+
+
 # ============================================================================
 # Test registry organized by study
 # ============================================================================
@@ -1349,6 +1384,7 @@ STUDY_TEST_FUNCS: Dict[str, Dict[str, Callable[[], bool]]] = {
         "sin_kernel": test_sin_kernel,
         "add_value": test_add_value,
         "rmsnorm_fused_llama": test_mp_rmsnorm_fused_llama,
+        "relu_triton_kernel": test_relu_triton_kernel,
     },
 }
 

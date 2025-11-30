@@ -42,6 +42,7 @@ STUDY_CASES: Dict[str, List[str]] = {
         "sin_kernel",
         "add_value",
         "rmsnorm_fused_llama",
+        "relu_triton_kernel",
     ],
 }
 
