@@ -35,6 +35,7 @@ STUDY_CASES: Dict[str, List[str]] = {
         "context_attn_llama",
         "context_attn_fwd",
         "bgmv_shrink_kernel",
+        "sin_kernel",
     ],
 }
 
@@ -126,6 +127,9 @@ ctx_fwd_optimized = _load_module("ctx_fwd_optimized", "mask_percentage/context_a
 
 bgmv_shrink_baseline = _load_module("bgmv_shrink_baseline", "mask_percentage/bgmv_shrink_kernel/baseline.py")
 bgmv_shrink_optimized = _load_module("bgmv_shrink_optimized", "mask_percentage/bgmv_shrink_kernel/optimized.py")
+
+sin_kernel_baseline = _load_module("sin_kernel_baseline", "mask_percentage/sin_kernel/baseline.py")
+sin_kernel_optimized = _load_module("sin_kernel_optimized", "mask_percentage/sin_kernel/optimized.py")
 
 
 def _report(title: str, ok: bool):
@@ -1206,6 +1210,37 @@ def test_bgmv_shrink_kernel():
     return all_ok
 
 
+def test_sin_kernel():
+    print("\n" + "=" * 80)
+    print("Testing Sin Kernel (baseline vs optimized)")
+    print("=" * 80)
+
+    torch.manual_seed(42)
+    torch.cuda.manual_seed(42)
+
+    rtol, atol = 1e-5, 1e-6
+    all_ok = True
+
+    test_cases = [
+        ("small", torch.randn(16, device="cuda")),
+        ("medium", torch.randn(1024, device="cuda")),
+        ("large", torch.randn(4096, device="cuda")),
+    ]
+
+    for name, x in test_cases:
+        y_base = sin_kernel_baseline.call_kernel(x)
+        y_opt = sin_kernel_optimized.call_kernel(x)
+
+        ok = torch.allclose(y_base, y_opt, rtol=rtol, atol=atol)
+        if not ok:
+            diff = torch.max(torch.abs(y_base - y_opt)).item()
+            print(f"{name} max diff: {diff:.2e}")
+        _report(f"Sin Kernel {name}", ok)
+        all_ok = all_ok and ok
+
+    return all_ok
+
+
 # ============================================================================
 # Test registry organized by study
 # ============================================================================
@@ -1238,6 +1273,7 @@ STUDY_TEST_FUNCS: Dict[str, Dict[str, Callable[[], bool]]] = {
         "context_attn_llama": test_context_attn_llama,
         "context_attn_fwd": test_context_attn_fwd,
         "bgmv_shrink_kernel": test_bgmv_shrink_kernel,
+        "sin_kernel": test_sin_kernel,
     },
 }
 

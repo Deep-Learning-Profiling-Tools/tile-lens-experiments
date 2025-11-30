@@ -39,6 +39,7 @@ STUDY_CASES: Dict[str, List[str]] = {
         "context_attn_llama",
         "context_attn_fwd",
         "bgmv_shrink_kernel",
+        "sin_kernel",
     ],
 }
 
