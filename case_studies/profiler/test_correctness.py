@@ -46,6 +46,7 @@ STUDY_CASES: Dict[str, List[str]] = {
         "diag_ssm_triton",
         "triton_conv2d_fwd",
         "rotary_transform_ops",
+        "attention_llama",
     ],
 }
 
@@ -163,6 +164,8 @@ mp_conv2d_baseline = _load_module("mp_conv2d_baseline", "mask_percentage/triton_
 mp_conv2d_optimized = _load_module("mp_conv2d_optimized", "mask_percentage/triton_conv2d_fwd/optimized.py")
 rotary_transform_baseline = _load_module("rotary_transform_baseline", "mask_percentage/rotary_transform_ops/baseline.py")
 rotary_transform_optimized = _load_module("rotary_transform_optimized", "mask_percentage/rotary_transform_ops/optimized.py")
+attention_llama_baseline = _load_module("attention_llama_baseline", "mask_percentage/attention_llama/baseline.py")
+attention_llama_optimized = _load_module("attention_llama_optimized", "mask_percentage/attention_llama/optimized.py")
 
 
 def _report(title: str, ok: bool):
@@ -1621,6 +1624,47 @@ def test_rotary_transform_ops():
     return all_ok
 
 
+def test_attention_llama():
+    print("\n" + "=" * 80)
+    print("Testing Attention LLaMA (baseline vs optimized)")
+    print("=" * 80)
+
+    torch.manual_seed(42)
+    torch.cuda.manual_seed(42)
+
+    import math
+    rtol, atol = 1e-2, 1e-3
+    all_ok = True
+
+    test_cases = [
+        ("non_causal", 1, 16, 32, 128, False),
+        ("causal", 1, 16, 32, 128, True),
+    ]
+
+    for name, batch, heads, seqlen, dhead, is_causal in test_cases:
+        xq = torch.randn([batch, heads, seqlen, dhead], dtype=torch.float16, device="cuda")
+        keys = torch.randn([batch, heads, seqlen, dhead], dtype=torch.float16, device="cuda")
+        values = torch.randn([batch, heads, seqlen, dhead], dtype=torch.float16, device="cuda")
+
+        xq = xq.transpose(1, 2)
+        keys = keys.transpose(1, 2)
+        values = values.transpose(1, 2)
+
+        scale = 1 / math.sqrt(dhead)
+
+        out_base = attention_llama_baseline.triton_fa(xq, keys, values, scale, is_causal, 0)
+        out_opt = attention_llama_optimized.triton_fa(xq, keys, values, scale, is_causal, 0)
+
+        ok = torch.allclose(out_base, out_opt, rtol=rtol, atol=atol)
+        if not ok:
+            diff = torch.max(torch.abs(out_base - out_opt)).item()
+            print(f"{name} max diff: {diff:.2e}")
+        _report(f"Attention LLaMA {name}", ok)
+        all_ok = all_ok and ok
+
+    return all_ok
+
+
 # ============================================================================
 # Test registry organized by study
 # ============================================================================
@@ -1664,6 +1708,7 @@ STUDY_TEST_FUNCS: Dict[str, Dict[str, Callable[[], bool]]] = {
         "diag_ssm_triton": test_mp_diag_ssm_triton,
         "triton_conv2d_fwd": test_mp_triton_conv2d_fwd,
         "rotary_transform_ops": test_rotary_transform_ops,
+        "attention_llama": test_attention_llama,
     },
 }
 
