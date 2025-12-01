@@ -44,6 +44,7 @@ STUDY_CASES: Dict[str, List[str]] = {
         "dropout_triton",
         "fifth_order_sph_harmonics",
         "diag_ssm_triton",
+        "triton_conv2d_fwd",
     ],
 }
 
@@ -157,6 +158,8 @@ fifth_order_sph_baseline = _load_module("fifth_order_sph_baseline", "mask_percen
 fifth_order_sph_optimized = _load_module("fifth_order_sph_optimized", "mask_percentage/fifth_order_sph_harmonics/optimized.py")
 mp_diag_ssm_baseline = _load_module("mp_diag_ssm_baseline", "mask_percentage/diag_ssm_triton/baseline.py")
 mp_diag_ssm_optimized = _load_module("mp_diag_ssm_optimized", "mask_percentage/diag_ssm_triton/optimized.py")
+mp_conv2d_baseline = _load_module("mp_conv2d_baseline", "mask_percentage/triton_conv2d_fwd/baseline.py")
+mp_conv2d_optimized = _load_module("mp_conv2d_optimized", "mask_percentage/triton_conv2d_fwd/optimized.py")
 
 
 def _report(title: str, ok: bool):
@@ -1547,6 +1550,40 @@ def test_mp_diag_ssm_triton():
     return all_ok
 
 
+def test_mp_triton_conv2d_fwd():
+    print("\n" + "=" * 80)
+    print("Testing Triton Conv2D Forward (mask_percentage: baseline vs optimized)")
+    print("=" * 80)
+
+    torch.manual_seed(42)
+    torch.cuda.manual_seed(42)
+
+    rtol, atol = 1e-4, 1e-5
+    all_ok = True
+
+    test_cases = [
+        ("basic_3x3", 1, 3, 32, 32, 16, 3, 3, 1, 1, 0, 0, 1),
+        ("padded_stride", 1, 3, 32, 32, 16, 3, 3, 2, 2, 1, 1, 1),
+        ("kernel_5x5", 1, 3, 32, 32, 16, 5, 5, 1, 1, 0, 0, 1),
+    ]
+
+    for name, batch, in_ch, h, w, out_ch, kh, kw, sh, sw, ph, pw, groups in test_cases:
+        input_tensor = torch.randn(batch, in_ch, h, w, device="cuda", dtype=torch.float32)
+        weight_tensor = torch.randn(out_ch, in_ch // groups, kh, kw, device="cuda", dtype=torch.float32)
+
+        out_base = mp_conv2d_baseline.conv2d_forward(input_tensor, weight_tensor, kh, kw, sh, sw, ph, pw, groups)
+        out_opt = mp_conv2d_optimized.conv2d_forward(input_tensor, weight_tensor, kh, kw, sh, sw, ph, pw, groups)
+
+        ok = torch.allclose(out_base, out_opt, rtol=rtol, atol=atol)
+        if not ok:
+            diff = torch.max(torch.abs(out_base - out_opt)).item()
+            print(f"{name} max diff: {diff:.2e}")
+        _report(f"Conv2D {name}", ok)
+        all_ok = all_ok and ok
+
+    return all_ok
+
+
 # ============================================================================
 # Test registry organized by study
 # ============================================================================
@@ -1588,6 +1625,7 @@ STUDY_TEST_FUNCS: Dict[str, Dict[str, Callable[[], bool]]] = {
         "dropout_triton": test_dropout_triton,
         "fifth_order_sph_harmonics": test_fifth_order_sph_harmonics,
         "diag_ssm_triton": test_mp_diag_ssm_triton,
+        "triton_conv2d_fwd": test_mp_triton_conv2d_fwd,
     },
 }
 

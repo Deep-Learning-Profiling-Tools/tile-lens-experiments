@@ -48,6 +48,7 @@ STUDY_CASES: Dict[str, List[str]] = {
         "dropout_triton",
         "fifth_order_sph_harmonics",
         "diag_ssm_triton",
+        "triton_conv2d_fwd",
     ],
 }
 
