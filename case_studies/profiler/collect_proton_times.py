@@ -238,13 +238,20 @@ def main() -> None:
         csv_path = study_root / "proton_times.csv"
         with csv_path.open("w", newline="") as csvfile:
             writer = csv.writer(csvfile)
-            writer.writerow(["Case Name", "baseline_time_us", "optimized_time_us"])
+            writer.writerow(["Case Name", "baseline_time_us", "optimized_time_us", "speedup"])
             for row in rows:
+                baseline = row["baseline"]
+                optimized = row["optimized"]
+                if baseline != "" and optimized != "" and optimized > 0:
+                    speedup = f"{baseline / optimized:.2f}x"
+                else:
+                    speedup = ""
                 writer.writerow(
                     [
                         row["case_name"],
-                        "" if row["baseline"] == "" else f"{row['baseline']:.3f}",
-                        "" if row["optimized"] == "" else f"{row['optimized']:.3f}",
+                        "" if baseline == "" else f"{baseline:.3f}",
+                        "" if optimized == "" else f"{optimized:.3f}",
+                        speedup,
                     ]
                 )
 
