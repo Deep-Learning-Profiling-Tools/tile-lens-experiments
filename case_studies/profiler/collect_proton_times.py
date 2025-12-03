@@ -239,7 +239,11 @@ def main() -> None:
                 }
             )
 
-        csv_path = study_root / "proton_times.csv"
+        csv_names = {
+            "unroll_for_loop": "unroll_times.csv",
+            "mask_percentage": "mask_times.csv",
+        }
+        csv_path = root / csv_names.get(study_name, f"{study_name}_times.csv")
         with csv_path.open("w", newline="") as csvfile:
             writer = csv.writer(csvfile)
             header = ["Case Name"]
