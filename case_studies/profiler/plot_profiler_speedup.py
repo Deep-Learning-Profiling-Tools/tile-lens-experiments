@@ -20,8 +20,7 @@ def plot_speedup(input_csv: Path, output_pdf: str, ylim: tuple, yticks: np.ndarr
 
     # 全局绘图风格设置
     sns.set_theme(style="whitegrid", font_scale=1.05)
-    plt.rcParams['font.family'] = 'serif'
-    plt.rcParams['font.serif'] = ['Times New Roman'] + plt.rcParams['font.serif']
+    plt.rcParams['font.family'] = 'sans-serif'
 
     # 创建画布
     fig, ax = plt.subplots(figsize=(14, 5))
@@ -63,7 +62,7 @@ def plot_speedup(input_csv: Path, output_pdf: str, ylim: tuple, yticks: np.ndarr
     ax.set_ylim(ylim)
     ax.set_yticks(yticks)
 
-    ax.tick_params(axis='x', pad=2, labelsize=22, labelcolor='0.2')
+    ax.tick_params(axis='x', pad=2, labelsize=20, labelcolor='0.2')
     ax.tick_params(axis='y', pad=0, labelsize=26)
 
     # 网格线

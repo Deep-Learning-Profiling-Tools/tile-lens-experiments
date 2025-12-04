@@ -20,7 +20,7 @@ python test_correctness.py -s unroll_for_loop
 python test_correctness.py -s mask_percentage
 
 # Run a specific case (auto-detects study if unique)
-python test_correctness.py -c iv_dependent_matmul
+python test_correctness.py -c diag_ssm_triton
 python test_correctness.py -c quantize_kv_transform
 
 # If a case exists in multiple studies, specify both -s and -c
@@ -41,7 +41,7 @@ python collect_proton_times.py -s unroll_for_loop
 python collect_proton_times.py -s mask_percentage
 
 # Run a specific case (auto-detects study if unique)
-python collect_proton_times.py -c iv_dependent_matmul
+python collect_proton_times.py -c diag_ssm_triton
 python collect_proton_times.py -c quantize_kv_transform
 
 # If a case exists in multiple studies, specify both -s and -c
@@ -53,11 +53,22 @@ python collect_proton_times.py -l
 
 This generates `proton_times.csv` in each study directory with timing comparisons.
 
+### Plot Speedup Charts
+Generate speedup bar charts from the statistics CSV files:
+```bash
+python plot_profiler_speedup.py
+```
+
+This reads `unroll_stats.csv` and `mask_stats.csv`, and generates:
+- `unroll_speedup.pdf` - Speedup chart for loop unrolling optimizations
+- `mask_speedup.pdf` - Speedup chart for mask percentage optimizations
+
 ## Directory Structure
 ```
 profiler/
 ├── test_correctness.py      # Correctness testing script
 ├── collect_proton_times.py  # Performance profiling script
+├── plot_profiler_speedup.py # Speedup chart plotting script
 ├── README.md
 ├── unroll_for_loop/         # Loop unrolling study
 │   ├── diag_ssm_triton/
@@ -85,7 +96,6 @@ Each case directory should contain:
 - `fast_rope_embedding`
 - `flash_decode2_llama`
 - `fused_rwkv6_kernel`
-- `iv_dependent_matmul`
 - `rmsnorm_fused`
 - `rmsnorm_fused_llama`
 - `rmsnorm_implementation`

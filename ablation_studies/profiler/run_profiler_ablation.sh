@@ -2,6 +2,27 @@
 # Bash wrapper for profiler ablation study
 # Run profiler ablation with different configurations
 
+# Parse command line options
+CASE_ARG=""
+CONFIGS=""
+
+while [[ $# -gt 0 ]]; do
+    case $1 in
+        -c|--case)
+            CASE_ARG="--case $2"
+            shift 2
+            ;;
+        *)
+            # Collect remaining arguments as configs
+            CONFIGS="$CONFIGS $1"
+            shift
+            ;;
+    esac
+done
+
+# Trim leading whitespace from CONFIGS
+CONFIGS=$(echo "$CONFIGS" | sed 's/^[[:space:]]*//')
+
 echo "========================================"
 echo "Running Profiler Ablation Study"
 echo "========================================"
@@ -28,9 +49,11 @@ echo ""
 # Base output directory
 OUTPUT_BASE="profiler_ablation_${TIMESTAMP}"
 
-# Check for whitelist
+# Check for case option or whitelist
 WHITELIST_ARG=""
-if [ -f "whitelist.txt" ]; then
+if [ -n "$CASE_ARG" ]; then
+    echo "✓ Running single case: $(echo $CASE_ARG | cut -d' ' -f2)"
+elif [ -f "whitelist.txt" ]; then
     echo "✓ Using whitelist.txt"
     WHITELIST_ARG="--whitelist whitelist.txt"
     echo "  Files in whitelist:"
@@ -39,6 +62,7 @@ else
     echo "✗ No whitelist.txt found, will run all files"
     echo "  Warning: This may take a long time!"
     echo "  Create whitelist.txt to run specific files only"
+    echo "  Or use -c <case_name> to run a single case"
 fi
 echo ""
 
@@ -50,13 +74,12 @@ echo "  3. only_block_sampling:      Load/store skipping OFF, Block sampling ON"
 echo "  4. both_disabled:            Load/store skipping OFF, Block sampling OFF (baseline)"
 echo ""
 
-# Parse command line arguments
-CONFIGS="all"
-if [ $# -gt 0 ]; then
-    CONFIGS="$@"
-    echo "Running specific configurations: $CONFIGS"
-else
+# Set default configs if not specified
+if [ -z "$CONFIGS" ]; then
+    CONFIGS="all"
     echo "Running all configurations"
+else
+    echo "Running specific configurations: $CONFIGS"
 fi
 echo ""
 
@@ -68,6 +91,7 @@ echo ""
 # Run the Python script
 python3 ablation_runner.py \
     ${WHITELIST_ARG} \
+    ${CASE_ARG} \
     --output-dir "${OUTPUT_BASE}" \
     --configs ${CONFIGS}
 

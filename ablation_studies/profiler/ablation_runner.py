@@ -26,7 +26,8 @@ PROFILER_CONFIGS = OrderedDict([
             "TRITON_INTERPRET": "1",
             "ENABLE_TIMING": "1",
             "PROFILER_ENABLE_LOAD_STORE_SKIPPING": "1",
-            "PROFILER_ENABLE_BLOCK_SAMPLING": "1"
+            "PROFILER_ENABLE_BLOCK_SAMPLING": "1",
+            "PROFILER_DISABLE_BUFFER_LOAD_CHECK": "1"
         }
     }),
     ("only_load_store_skipping", {
@@ -36,7 +37,8 @@ PROFILER_CONFIGS = OrderedDict([
             "TRITON_INTERPRET": "1",
             "ENABLE_TIMING": "1",
             "PROFILER_ENABLE_LOAD_STORE_SKIPPING": "1",
-            "PROFILER_ENABLE_BLOCK_SAMPLING": "0"
+            "PROFILER_ENABLE_BLOCK_SAMPLING": "0",
+            "PROFILER_DISABLE_BUFFER_LOAD_CHECK": "1"
         }
     }),
     ("only_block_sampling", {
@@ -46,7 +48,8 @@ PROFILER_CONFIGS = OrderedDict([
             "TRITON_INTERPRET": "1",
             "ENABLE_TIMING": "1",
             "PROFILER_ENABLE_LOAD_STORE_SKIPPING": "0",
-            "PROFILER_ENABLE_BLOCK_SAMPLING": "1"
+            "PROFILER_ENABLE_BLOCK_SAMPLING": "1",
+            "PROFILER_DISABLE_BUFFER_LOAD_CHECK": "1"
         }
     }),
     ("both_disabled", {
@@ -56,7 +59,8 @@ PROFILER_CONFIGS = OrderedDict([
             "TRITON_INTERPRET": "1",
             "ENABLE_TIMING": "1",
             "PROFILER_ENABLE_LOAD_STORE_SKIPPING": "0",
-            "PROFILER_ENABLE_BLOCK_SAMPLING": "0"
+            "PROFILER_ENABLE_BLOCK_SAMPLING": "0",
+            "PROFILER_DISABLE_BUFFER_LOAD_CHECK": "1"
         }
     })
 ])
@@ -74,7 +78,7 @@ def load_whitelist(whitelist_file):
     return whitelist
 
 
-def discover_files(whitelist=None):
+def discover_files(whitelist=None, case=None):
     """Discover Python files to profile."""
     files = []
 
@@ -85,7 +89,16 @@ def discover_files(whitelist=None):
     # Get all Python files
     all_files = sorted([f for f in TRITONBENCH_DIR.glob("*.py") if not f.name.startswith("__")])
 
-    if whitelist:
+    if case:
+        # Run a single case
+        case_name = case if case.endswith('.py') else f"{case}.py"
+        files = [f for f in all_files if f.name == case_name]
+        if files:
+            print(f"Running single case: {case_name}")
+        else:
+            print(f"Error: Case not found: {case_name}")
+            print(f"Available cases: {', '.join(f.stem for f in all_files[:10])}...")
+    elif whitelist:
         # Filter by whitelist
         files = [f for f in all_files if f.name in whitelist]
         print(f"Using whitelist: {len(files)} out of {len(all_files)} files selected")
@@ -174,6 +187,7 @@ def run_profiler(file_path, config, output_dir, test_number, total_tests):
 def main():
     parser = argparse.ArgumentParser(description="Run profiler ablation study on TritonBench files")
     parser.add_argument("--whitelist", type=str, help="Path to whitelist file")
+    parser.add_argument("-c", "--case", type=str, help="Run a single test case (e.g., bgmv_expand_slice)")
     parser.add_argument("--output-dir", type=str, help="Output directory for logs")
     parser.add_argument("--configs", nargs="+", choices=list(PROFILER_CONFIGS.keys()) + ["all"],
                        default=["all"], help="Configurations to run")
@@ -199,7 +213,7 @@ def main():
             print(f"Warning: Whitelist file not found: {whitelist_file}")
 
     # Discover files
-    files = discover_files(whitelist)
+    files = discover_files(whitelist, case=args.case)
     if not files:
         print("No files to process")
         return 1
