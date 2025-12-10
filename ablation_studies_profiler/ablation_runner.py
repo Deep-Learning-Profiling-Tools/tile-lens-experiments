@@ -219,8 +219,7 @@ Examples:
     if args.output_dir:
         output_dir = Path(args.output_dir)
     else:
-        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        output_dir = Path(f"profiler_ablation_{timestamp}")
+        output_dir = Path("results")
 
     output_dir.mkdir(parents=True, exist_ok=True)
 
@@ -257,7 +256,6 @@ Examples:
     print(f"{'=' * 60}\n")
 
     # Run tests
-    test_counter = 0
     results = {}
 
     for config_name in configs_to_run:
@@ -267,10 +265,11 @@ Examples:
         print()
 
         config_results = []
+        test_counter = 0
 
         for test in tests:
             test_counter += 1
-            success = run_profiler(test, config, output_dir, test_counter, total_tests)
+            success = run_profiler(test, config, output_dir, test_counter, len(tests))
             config_results.append({
                 "name": test["name"],
                 "global_id": test["global_id"],

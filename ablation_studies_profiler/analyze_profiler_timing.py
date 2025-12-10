@@ -260,7 +260,7 @@ def main():
     )
     parser.add_argument(
         "output_dir",
-        help="Output directory containing test results (e.g., profiler_ablation_20231113_120000)"
+        help="Output directory containing test results (e.g., results)"
     )
     parser.add_argument(
         "--csv",
