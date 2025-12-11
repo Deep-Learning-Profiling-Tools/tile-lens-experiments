@@ -3,22 +3,27 @@
 
 import argparse
 import csv
+import re
 import statistics
 from pathlib import Path
-
-NUM_RUNS = 5
 
 
 def calculate_stats(input_csv: Path, output_csv: Path) -> None:
     rows = []
     with input_csv.open() as f:
         reader = csv.DictReader(f)
+        fieldnames = reader.fieldnames
+
+        # 自动检测 run 数量
+        baseline_cols = [c for c in fieldnames if re.match(r'baseline_run\d+', c)]
+        optimized_cols = [c for c in fieldnames if re.match(r'optimized_run\d+', c)]
+
         for row in reader:
             case_name = row["Case Name"]
 
             # Extract baseline and optimized runs
-            baseline_runs = [float(row[f"baseline_run{i+1}"]) for i in range(NUM_RUNS) if row[f"baseline_run{i+1}"]]
-            optimized_runs = [float(row[f"optimized_run{i+1}"]) for i in range(NUM_RUNS) if row[f"optimized_run{i+1}"]]
+            baseline_runs = [float(row[c]) for c in baseline_cols if row[c]]
+            optimized_runs = [float(row[c]) for c in optimized_cols if row[c]]
 
             # Calculate statistics
             if baseline_runs:
